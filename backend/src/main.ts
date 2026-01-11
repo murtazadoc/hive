@@ -1,54 +1,29 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import helmet from 'helmet';
-import { AppModule } from './app.module';
+import { Module, Controller, Get } from '@nestjs/common';
+
+@Controller()
+class AppController {
+  @Get()
+  getHello() {
+    return { message: 'HIVE API is running!', status: 'ok' };
+  }
+
+  @Get('health')
+  health() {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+  }
+}
+
+@Module({
+  controllers: [AppController],
+})
+class AppModule {}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  // Security
-  app.use(helmet());
-  app.enableCors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'],
-    credentials: true,
-  });
-
-  // Validation
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
-
-  // API Prefix
-  app.setGlobalPrefix('api/v1');
-
-  // Swagger Documentation
-  const config = new DocumentBuilder()
-    .setTitle('Hive API')
-    .setDescription('Hive - Connecting Businesses API Documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('auth', 'Authentication endpoints')
-    .addTag('users', 'User management')
-    .addTag('businesses', 'Business profiles and management')
-    .addTag('categories', 'Business categories')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
+  app.enableCors();
   const port = process.env.PORT || 3000;
   await app.listen(port);
-
-  console.log(`🐝 Hive API running on http://localhost:${port}`);
-  console.log(`📚 API Docs: http://localhost:${port}/api/docs`);
+  console.log(`HIVE API running on port ${port}`);
 }
-
 bootstrap();
