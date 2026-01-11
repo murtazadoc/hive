@@ -1,77 +1,102 @@
-import { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './store/authStore';
+import { useState, useEffect } from 'react'
 
-// Layouts
-import DashboardLayout from './layouts/DashboardLayout';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
-// Pages
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import UsersPage from './pages/UsersPage';
-import UserDetailPage from './pages/UserDetailPage';
-import BusinessesPage from './pages/BusinessesPage';
-import BusinessDetailPage from './pages/BusinessDetailPage';
-import ProductsPage from './pages/ProductsPage';
-import CategoriesPage from './pages/CategoriesPage';
-import ReportsPage from './pages/ReportsPage';
-import SettingsPage from './pages/SettingsPage';
-import ModerationPage from './pages/ModerationPage';
-
-// Protected route wrapper
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuthStore();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-honey-500"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-export default function App() {
-  const { checkAuth } = useAuthStore();
+function App() {
+  const [apiStatus, setApiStatus] = useState<string>('Checking...')
 
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    fetch(`${API_URL}/health`)
+      .then(res => res.json())
+      .then(data => setApiStatus(`API Online: ${data.status}`))
+      .catch(() => setApiStatus('API Offline'))
+  }, [])
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
+    <div style={{ 
+      fontFamily: 'system-ui, sans-serif',
+      maxWidth: '1200px',
+      margin: '0 auto',
+      padding: '20px'
+    }}>
+      <header style={{ 
+        background: '#f59e0b',
+        color: 'white',
+        padding: '20px',
+        borderRadius: '8px',
+        marginBottom: '20px'
+      }}>
+        <h1 style={{ margin: 0 }}>🐝 HIVE Admin Dashboard</h1>
+        <p style={{ margin: '10px 0 0 0', opacity: 0.9 }}>Manage your marketplace</p>
+      </header>
 
-      {/* Protected routes */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<DashboardPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="users/:id" element={<UserDetailPage />} />
-        <Route path="businesses" element={<BusinessesPage />} />
-        <Route path="businesses/:id" element={<BusinessDetailPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="categories" element={<CategoriesPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="moderation" element={<ModerationPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-      </Route>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+        gap: '20px',
+        marginBottom: '20px'
+      }}>
+        <StatCard title="API Status" value={apiStatus} icon="🔌" />
+        <StatCard title="Total Users" value="0" icon="👥" />
+        <StatCard title="Total Products" value="0" icon="📦" />
+        <StatCard title="Total Orders" value="0" icon="🛒" />
+      </div>
 
-      {/* Catch all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
+      <div style={{
+        background: 'white',
+        borderRadius: '8px',
+        padding: '20px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <h2>Quick Actions</h2>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Button>View Users</Button>
+          <Button>View Products</Button>
+          <Button>View Orders</Button>
+          <Button>View Businesses</Button>
+        </div>
+      </div>
+
+      <footer style={{ 
+        marginTop: '40px',
+        textAlign: 'center',
+        color: '#666'
+      }}>
+        <p>HIVE Admin v1.0 | API: {API_URL}</p>
+      </footer>
+    </div>
+  )
 }
+
+function StatCard({ title, value, icon }: { title: string, value: string, icon: string }) {
+  return (
+    <div style={{
+      background: 'white',
+      borderRadius: '8px',
+      padding: '20px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+    }}>
+      <div style={{ fontSize: '2rem' }}>{icon}</div>
+      <h3 style={{ margin: '10px 0 5px 0', color: '#666' }}>{title}</h3>
+      <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }}>{value}</p>
+    </div>
+  )
+}
+
+function Button({ children }: { children: React.ReactNode }) {
+  return (
+    <button style={{
+      background: '#f59e0b',
+      color: 'white',
+      border: 'none',
+      padding: '10px 20px',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontSize: '14px'
+    }}>
+      {children}
+    </button>
+  )
+}
+
+export default App
