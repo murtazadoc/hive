@@ -10,13 +10,12 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
-    "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": false,
+    "strict": false,
     "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false,
-    "strict": false
-  }
+    "strictNullChecks": false,
+    "noEmit": false
+  },
+  "include": ["src/main.ts"],
+  "exclude": ["node_modules", "dist", "test"]
 }
