@@ -1,0 +1,176 @@
+# =====================================================
+# HIVE Alertmanager Configuration
+# =====================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+      
+    route:
+      group_by: ['alertname', 'severity']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'default-receiver'
+      routes:
+        # Critical alerts - immediate notification
+        - match:
+            severity: critical
+          receiver: 'critical-receiver'
+          group_wait: 10s
+          repeat_interval: 1h
+        
+        # Warning alerts
+        - match:
+            severity: warning
+          receiver: 'warning-receiver'
+          group_wait: 1m
+          repeat_interval: 4h
+        
+        # Business alerts (orders, payments)
+        - match:
+            category: business
+          receiver: 'business-receiver'
+          group_wait: 1m
+    
+    receivers:
+      - name: 'default-receiver'
+        slack_configs:
+          - channel: '#hive-alerts'
+            send_resolved: true
+            title: '{{ .Status | toUpper }}{{ if eq .Status "firing" }} 🔥{{ else }} ✅{{ end }} {{ .CommonLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+      
+      - name: 'critical-receiver'
+        slack_configs:
+          - channel: '#hive-critical'
+            send_resolved: true
+            title: '🚨 CRITICAL: {{ .CommonLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Action Required:* Immediate attention needed!
+              {{ end }}
+        # SMS notification for critical alerts
+        webhook_configs:
+          - url: 'http://hive-backend.hive.svc.cluster.local/webhooks/alert'
+            send_resolved: true
+      
+      - name: 'warning-receiver'
+        slack_configs:
+          - channel: '#hive-alerts'
+            send_resolved: true
+            title: '⚠️ WARNING: {{ .CommonLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+      
+      - name: 'business-receiver'
+        slack_configs:
+          - channel: '#hive-business'
+            send_resolved: true
+            title: '📊 Business Alert: {{ .CommonLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+    
+    inhibit_rules:
+      # If critical, suppress warning
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname']
+      
+      # If service is down, suppress other alerts for that service
+      - source_match:
+          alertname: 'ServiceDown'
+        target_match_re:
+          alertname: '.+'
+        equal: ['service']
+
+---
+# =====================================================
+# Alertmanager Deployment
+# =====================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.26.0
+          
+          args:
+            - '--config.file=/etc/alertmanager/alertmanager.yml'
+            - '--storage.path=/alertmanager'
+          
+          ports:
+            - containerPort: 9093
+              name: http
+          
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: data
+              mountPath: /alertmanager
+      
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: data
+          emptyDir: {}
+
+---
+# =====================================================
+# Alertmanager Service
+# =====================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9093
+      targetPort: 9093
+  selector:
+    app: alertmanager

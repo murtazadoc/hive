@@ -1,0 +1,81 @@
+# =====================================================
+# HIVE Kustomize - Staging Overlay
+# =====================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hive-staging
+
+resources:
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+
+# Reduce replicas for staging
+replicas:
+  - name: hive-backend
+    count: 2
+  - name: hive-admin
+    count: 1
+
+# Staging-specific configuration
+configMapGenerator:
+  - name: hive-config
+    behavior: merge
+    literals:
+      - NODE_ENV=staging
+      - LOG_LEVEL=debug
+      - MPESA_ENVIRONMENT=sandbox
+
+# Use staging images
+images:
+  - name: ghcr.io/your-org/hive-backend
+    newTag: develop
+  - name: ghcr.io/your-org/hive-admin
+    newTag: develop
+
+# Resource patches for staging
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 256Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 250m
+    target:
+      kind: Deployment
+      name: hive-backend
+
+  # Smaller HPA for staging
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+    target:
+      kind: HorizontalPodAutoscaler
+      name: hive-backend-hpa
+
+  # Staging ingress hosts
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.staging.hive.co.ke
+      - op: replace
+        path: /spec/rules/1/host
+        value: admin.staging.hive.co.ke
+      - op: replace
+        path: /spec/tls/0/hosts
+        value:
+          - api.staging.hive.co.ke
+          - admin.staging.hive.co.ke
+    target:
+      kind: Ingress
+      name: hive-ingress

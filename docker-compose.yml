@@ -1,0 +1,143 @@
+# =====================================================
+# HIVE Docker Compose - Development
+# =====================================================
+
+version: '3.8'
+
+services:
+  # =====================================================
+  # POSTGRESQL DATABASE
+  # =====================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: hive-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive_dev_password
+      POSTGRES_DB: hive_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive -d hive_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =====================================================
+  # REDIS CACHE
+  # =====================================================
+  redis:
+    image: redis:7-alpine
+    container_name: hive-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =====================================================
+  # BACKEND API
+  # =====================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: hive-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://hive:hive_dev_password@postgres:5432/hive_dev
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-jwt-secret-change-in-production
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run start:dev
+
+  # =====================================================
+  # ADMIN DASHBOARD
+  # =====================================================
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile.dev
+    container_name: hive-admin
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./admin:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:3000
+    command: npm run dev
+
+  # =====================================================
+  # PGADMIN (Database GUI)
+  # =====================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: hive-pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@hive.co.ke
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+
+  # =====================================================
+  # REDIS COMMANDER (Redis GUI)
+  # =====================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: hive-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    depends_on:
+      - redis
+
+  # =====================================================
+  # MAILHOG (Email Testing)
+  # =====================================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: hive-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
+
+networks:
+  default:
+    name: hive-network

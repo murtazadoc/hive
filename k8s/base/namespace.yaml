@@ -1,0 +1,81 @@
+# =====================================================
+# HIVE Kubernetes - Namespace & ConfigMap
+# =====================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hive
+  labels:
+    app: hive
+    environment: production
+
+---
+# =====================================================
+# CONFIG MAP - Non-sensitive configuration
+# =====================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-config
+  namespace: hive
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+  
+  # Database
+  DB_HOST: "hive-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "hive"
+  
+  # Redis
+  REDIS_HOST: "hive-redis"
+  REDIS_PORT: "6379"
+  
+  # External Services
+  CLOUDINARY_CLOUD_NAME: "your-cloud-name"
+  MPESA_ENVIRONMENT: "production"
+  AT_ENVIRONMENT: "production"
+  
+  # Feature Flags
+  ENABLE_ANALYTICS: "true"
+  ENABLE_NOTIFICATIONS: "true"
+  ENABLE_SEARCH: "true"
+
+---
+# =====================================================
+# SECRET - Sensitive configuration
+# =====================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hive-secrets
+  namespace: hive
+type: Opaque
+stringData:
+  # Database
+  DB_USER: "hive"
+  DB_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+  DATABASE_URL: "postgresql://hive:CHANGE_ME@hive-postgres:5432/hive"
+  
+  # JWT
+  JWT_SECRET: "CHANGE_ME_GENERATE_SECURE_KEY"
+  
+  # M-Pesa
+  MPESA_CONSUMER_KEY: "your-consumer-key"
+  MPESA_CONSUMER_SECRET: "your-consumer-secret"
+  MPESA_PASSKEY: "your-passkey"
+  MPESA_SHORTCODE: "174379"
+  
+  # Cloudinary
+  CLOUDINARY_API_KEY: "your-api-key"
+  CLOUDINARY_API_SECRET: "your-api-secret"
+  
+  # Africa's Talking
+  AT_API_KEY: "your-at-key"
+  AT_USERNAME: "your-username"
+  
+  # FCM
+  FCM_PROJECT_ID: "your-project-id"
+  FCM_SERVICE_ACCOUNT: "{}"

@@ -1,0 +1,291 @@
+// Hive - Prisma Schema
+// Database ORM for PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// CORE USER ENTITY
+// =====================================================
+model User {
+  id            String    @id @default(uuid())
+  
+  // Authentication
+  phoneNumber   String?   @unique @map("phone_number")
+  email         String?   @unique
+  passwordHash  String?   @map("password_hash")
+  
+  // Profile
+  firstName     String    @map("first_name")
+  lastName      String    @map("last_name")
+  avatarUrl     String?   @map("avatar_url")
+  
+  // Verification
+  phoneVerified Boolean   @default(false) @map("phone_verified")
+  emailVerified Boolean   @default(false) @map("email_verified")
+  
+  // Status
+  isActive      Boolean   @default(true) @map("is_active")
+  isBanned      Boolean   @default(false) @map("is_banned")
+  banReason     String?   @map("ban_reason")
+  
+  // Metadata
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  ownedBusinesses   BusinessProfile[]   @relation("BusinessOwner")
+  businessMembers   BusinessMember[]
+  refreshTokens     RefreshToken[]
+  otpCodes          OtpCode[]
+  activityLogs      ActivityLog[]
+  approvedBusinesses BusinessProfile[]  @relation("BusinessApprover")
+  invitedMembers    BusinessMember[]    @relation("MemberInviter")
+  
+  @@map("users")
+}
+
+// =====================================================
+// OTP VERIFICATION
+// =====================================================
+model OtpCode {
+  id          String    @id @default(uuid())
+  userId      String?   @map("user_id")
+  phoneNumber String?   @map("phone_number")
+  email       String?
+  code        String
+  purpose     String    // 'registration', 'login', 'password_reset'
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([phoneNumber, purpose])
+  @@index([expiresAt])
+  @@map("otp_codes")
+}
+
+// =====================================================
+// REFRESH TOKENS
+// =====================================================
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  tokenHash   String    @map("token_hash")
+  deviceInfo  Json      @default("{}") @map("device_info")
+  ipAddress   String?   @map("ip_address")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+// =====================================================
+// BUSINESS CATEGORIES
+// =====================================================
+model BusinessCategory {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  icon        String?
+  parentId    String?   @map("parent_id")
+  level       Int       @default(0)
+  sortOrder   Int       @default(0) @map("sort_order")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  parent      BusinessCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    BusinessCategory[]  @relation("CategoryHierarchy")
+  businesses  BusinessProfile[]
+  
+  @@index([parentId])
+  @@map("business_categories")
+}
+
+// =====================================================
+// BUSINESS PROFILES
+// =====================================================
+enum BusinessType {
+  retail
+  professional
+  both
+}
+
+enum BusinessStatus {
+  draft
+  pending
+  approved
+  rejected
+  suspended
+}
+
+model BusinessProfile {
+  id              String          @id @default(uuid())
+  
+  // Ownership
+  ownerId         String          @map("owner_id")
+  
+  // Basic Info
+  businessName    String          @map("business_name")
+  slug            String          @unique
+  tagline         String?
+  description     String?
+  
+  // Type
+  businessType    BusinessType    @default(retail) @map("business_type")
+  categoryId      String?         @map("category_id")
+  
+  // Contact
+  whatsappNumber  String          @map("whatsapp_number")
+  phoneNumber     String?         @map("phone_number")
+  email           String?
+  website         String?
+  
+  // Location
+  address         String?
+  city            String?
+  area            String?         // e.g., 'Saifee Park'
+  country         String          @default("Kenya")
+  latitude        Decimal?        @db.Decimal(10, 8)
+  longitude       Decimal?        @db.Decimal(11, 8)
+  
+  // Media
+  logoUrl         String?         @map("logo_url")
+  coverImageUrl   String?         @map("cover_image_url")
+  
+  // Verification & Status
+  status          BusinessStatus  @default(draft)
+  isVerified      Boolean         @default(false) @map("is_verified")
+  verifiedAt      DateTime?       @map("verified_at")
+  verificationNotes String?       @map("verification_notes")
+  
+  // KYC
+  kycSubmitted    Boolean         @default(false) @map("kyc_submitted")
+  kycDocumentUrls Json            @default("[]") @map("kyc_document_urls")
+  
+  // Stats
+  productCount    Int             @default(0) @map("product_count")
+  followerCount   Int             @default(0) @map("follower_count")
+  ratingAverage   Decimal         @default(0) @db.Decimal(3, 2) @map("rating_average")
+  ratingCount     Int             @default(0) @map("rating_count")
+  
+  // Settings
+  settings        Json            @default("{}")
+  
+  // Approval
+  approvedById    String?         @map("approved_by")
+  approvedAt      DateTime?       @map("approved_at")
+  rejectionReason String?         @map("rejection_reason")
+  
+  // Metadata
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  // Relations
+  owner           User            @relation("BusinessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  approvedBy      User?           @relation("BusinessApprover", fields: [approvedById], references: [id])
+  category        BusinessCategory? @relation(fields: [categoryId], references: [id])
+  members         BusinessMember[]
+  professionalProfile ProfessionalProfile?
+  activityLogs    ActivityLog[]
+  
+  @@index([ownerId])
+  @@index([status])
+  @@index([categoryId])
+  @@index([area])
+  @@map("business_profiles")
+}
+
+// =====================================================
+// RBAC - Business Members
+// =====================================================
+enum BusinessRole {
+  owner
+  admin
+  editor
+  viewer
+}
+
+model BusinessMember {
+  id          String        @id @default(uuid())
+  businessId  String        @map("business_id")
+  userId      String        @map("user_id")
+  role        BusinessRole  @default(viewer)
+  permissions Json          @default("{}") // Granular overrides
+  invitedById String?       @map("invited_by")
+  invitedAt   DateTime      @default(now()) @map("invited_at")
+  acceptedAt  DateTime?     @map("accepted_at")
+  isActive    Boolean       @default(true) @map("is_active")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  
+  business    BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User?           @relation("MemberInviter", fields: [invitedById], references: [id])
+  
+  @@unique([businessId, userId])
+  @@index([businessId])
+  @@index([userId])
+  @@map("business_members")
+}
+
+// =====================================================
+// PROFESSIONAL PROFILES
+// =====================================================
+model ProfessionalProfile {
+  id                String    @id @default(uuid())
+  businessId        String    @unique @map("business_id")
+  title             String?
+  yearsOfExperience Int?      @map("years_of_experience")
+  certifications    Json      @default("[]")
+  serviceAreas      Json      @default("[]") @map("service_areas")
+  availability      Json      @default("{}") // Working hours
+  hourlyRate        Decimal?  @db.Decimal(10, 2) @map("hourly_rate")
+  currency          String    @default("KES")
+  portfolioEnabled  Boolean   @default(true) @map("portfolio_enabled")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  business          BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  
+  @@map("professional_profiles")
+}
+
+// =====================================================
+// ACTIVITY LOGS
+// =====================================================
+model ActivityLog {
+  id          String    @id @default(uuid())
+  userId      String?   @map("user_id")
+  businessId  String?   @map("business_id")
+  action      String
+  entityType  String?   @map("entity_type")
+  entityId    String?   @map("entity_id")
+  details     Json      @default("{}")
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User?     @relation(fields: [userId], references: [id])
+  business    BusinessProfile? @relation(fields: [businessId], references: [id])
+  
+  @@index([userId])
+  @@index([businessId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}

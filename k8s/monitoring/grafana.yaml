@@ -1,0 +1,330 @@
+# =====================================================
+# HIVE Grafana Monitoring Dashboard
+# =====================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+
+---
+# =====================================================
+# Grafana Dashboard ConfigMap
+# =====================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+  hive-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "HIVE Overview",
+        "tags": ["hive"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{namespace=\"hive\"}[5m]))",
+                "legendFormat": "req/s"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 100},
+                    {"color": "red", "value": 500}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Error Rate",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{namespace=\"hive\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{namespace=\"hive\"}[5m])) * 100",
+                "legendFormat": "error %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 1},
+                    {"color": "red", "value": 5}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 3,
+            "title": "P95 Latency",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"hive\"}[5m])) by (le))",
+                "legendFormat": "p95"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 0.5},
+                    {"color": "red", "value": 1}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 4,
+            "title": "Active Pods",
+            "type": "stat",
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+            "targets": [
+              {
+                "expr": "count(kube_pod_status_ready{namespace=\"hive\", condition=\"true\"})",
+                "legendFormat": "pods"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Request Rate Over Time",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{namespace=\"hive\"}[5m])) by (status)",
+                "legendFormat": "{{status}}"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "Latency Distribution",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{namespace=\"hive\"}[5m])) by (le))",
+                "legendFormat": "p50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"hive\"}[5m])) by (le))",
+                "legendFormat": "p95"
+              },
+              {
+                "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace=\"hive\"}[5m])) by (le))",
+                "legendFormat": "p99"
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "title": "Memory Usage",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+            "targets": [
+              {
+                "expr": "sum(container_memory_usage_bytes{namespace=\"hive\"}) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {"unit": "bytes"}
+            }
+          },
+          {
+            "id": 8,
+            "title": "CPU Usage",
+            "type": "timeseries",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+            "targets": [
+              {
+                "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"hive\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# =====================================================
+# Grafana Deployment
+# =====================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.1.0
+          
+          ports:
+            - containerPort: 3000
+              name: http
+          
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-secrets
+                  key: admin-password
+            - name: GF_INSTALL_PLUGINS
+              value: "grafana-clock-panel,grafana-simple-json-datasource"
+          
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "200m"
+          
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-config
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+      
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-config
+          configMap:
+            name: grafana-dashboards
+            items:
+              - key: dashboards.yaml
+                path: dashboards.yaml
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+            items:
+              - key: hive-overview.json
+                path: hive-overview.json
+
+---
+# =====================================================
+# Grafana Secret
+# =====================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secrets
+  namespace: monitoring
+type: Opaque
+stringData:
+  admin-password: "CHANGE_ME_SECURE_PASSWORD"
+
+---
+# =====================================================
+# Grafana Service
+# =====================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: grafana
+
+---
+# =====================================================
+# Grafana Ingress
+# =====================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - grafana.hive.co.ke
+      secretName: grafana-tls
+  rules:
+    - host: grafana.hive.co.ke
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
