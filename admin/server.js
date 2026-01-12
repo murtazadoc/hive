@@ -1,6 +1,10 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
 const DIST = path.join(__dirname, 'dist');
@@ -38,18 +42,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Admin running on port ${PORT}`);
+  console.log(`Admin running on http://0.0.0.0:${PORT}`);
 });
-```
-
-6. Click **"Commit changes"**
-
----
-
-### Step 2: Update Start Command
-
-1. Go to Railway → **admin service**
-2. **Settings** tab → **Start Command**
-3. Change to:
-```
-node server.js
